@@ -41,6 +41,7 @@ import {
     BranchMatchingStrategy,
     Configuration,
     PrebuildSettings,
+    RestrictionSettings,
     WorkspaceSettings,
 } from "@gitpod/public-api/lib/gitpod/v1/configuration_pb";
 import {
@@ -135,6 +136,7 @@ import {
     PrebuildSettings as PrebuildSettingsProtocol,
     PrebuildWithStatus,
     Project,
+    ProjectSettings,
     Organization as ProtocolOrganization,
 } from "@gitpod/gitpod-protocol/lib/teams-projects-protocol";
 import {
@@ -934,6 +936,14 @@ export class PublicAPIConverter {
         return result;
     }
 
+    fromConfigurationRestrictionSettings(settings?: DeepPartial<RestrictionSettings>) {
+        const result: Partial<Pick<ProjectSettings, "allowedWorkspaceClasses">> = {};
+        if (settings?.allowedWorkspaceClasses) {
+            result.allowedWorkspaceClasses = settings.allowedWorkspaceClasses.filter((e) => !!e) as string[];
+        }
+        return result;
+    }
+
     fromBranchMatchingStrategy(
         branchStrategy?: BranchMatchingStrategy,
     ): PrebuildSettingsProtocol.BranchStrategy | undefined {
@@ -971,6 +981,7 @@ export class PublicAPIConverter {
     fromPartialConfiguration(configuration: PartialConfiguration): PartialProject {
         const prebuilds = this.fromPartialPrebuildSettings(configuration.prebuildSettings);
         const workspaceClasses = this.fromWorkspaceSettings(configuration.workspaceSettings?.workspaceClass);
+        const restrictions = this.fromConfigurationRestrictionSettings(configuration.restrictionSettings);
         const result: PartialProject = {
             id: configuration.id,
         };
@@ -983,6 +994,12 @@ export class PublicAPIConverter {
             result.settings = {
                 prebuilds,
                 workspaceClasses,
+            };
+        }
+        if (Object.keys(restrictions).length > 0) {
+            result.settings = {
+                ...result.settings,
+                allowedWorkspaceClasses: restrictions.allowedWorkspaceClasses,
             };
         }
 
@@ -1006,6 +1023,7 @@ export class PublicAPIConverter {
         result.creationTime = Timestamp.fromDate(new Date(project.creationTime));
         result.workspaceSettings = this.toWorkspaceSettings(project.settings?.workspaceClasses?.regular);
         result.prebuildSettings = this.toPrebuildSettings(project.settings?.prebuilds);
+        result.restrictionSettings = this.toConfigurationRestrictionSettings(project.settings);
         return result;
     }
 
@@ -1019,6 +1037,12 @@ export class PublicAPIConverter {
             result.workspaceClass = prebuilds.workspaceClass ?? "";
         }
         return result;
+    }
+
+    toConfigurationRestrictionSettings(settings?: ProjectSettings): RestrictionSettings {
+        return new RestrictionSettings({
+            allowedWorkspaceClasses: settings?.allowedWorkspaceClasses ?? [],
+        });
     }
 
     toBranchMatchingStrategy(branchStrategy?: PrebuildSettingsProtocol.BranchStrategy): BranchMatchingStrategy {

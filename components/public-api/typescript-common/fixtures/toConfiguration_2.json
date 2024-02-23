@@ -16,6 +16,6 @@
       "prebuildInterval": 20,
       "workspaceClass": "dev"
     },
-    "allowedWorkspaceClasses": ["cls-1", "cls-2"]
+    "restrictedWorkspaceClasses": ["cls-1", "cls-2"]
   }
 }

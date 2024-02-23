@@ -86,6 +86,7 @@ export type ProjectPermission =
     | "editor"
     | "read_info"
     | "write_info"
+    | "write_important_info"
     | "delete"
     | "read_env_var"
     | "write_env_var"

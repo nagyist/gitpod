@@ -95,4 +95,5 @@ func init() {
 	proxyCmd.Flags().StringVar(&proxyOpts.TargetRef, "target-ref", os.Getenv("WORKSPACEKIT_BOBPROXY_TARGETREF"), "ref of the target image")
 	proxyCmd.Flags().StringVar(&proxyOpts.Auth, "auth", os.Getenv("WORKSPACEKIT_BOBPROXY_AUTH"), "authentication to use")
 	proxyCmd.Flags().StringVar(&proxyOpts.AdditionalAuth, "additional-auth", os.Getenv("WORKSPACEKIT_BOBPROXY_ADDITIONALAUTH"), "additional authentication to use")
+	// WORKSPACEKIT_BOBPROXY_BASEREF=localhost:8080/test:abc WORKSPACEKIT_BOBPROXY_TARGETREF=localhost:8080/target:83 ./bob proxy
 }

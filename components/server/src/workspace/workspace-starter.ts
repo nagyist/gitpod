@@ -1178,7 +1178,7 @@ export class WorkspaceStarter {
             req.setAuth(auth);
             req.setForceRebuild(forceRebuild);
             req.setTriggeredBy(user.id);
-            if ((ignoreBaseImageresolvedAndRebuildBase || forceRebuild) && workspace.baseImageNameResolved) {
+            if (!(ignoreBaseImageresolvedAndRebuildBase || forceRebuild) && workspace.baseImageNameResolved) {
                 req.setBaseImageNameResolved(workspace.baseImageNameResolved);
             }
             const supervisorImage = instance.configuration?.supervisorImage;

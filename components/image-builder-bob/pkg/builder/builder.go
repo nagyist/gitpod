@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -91,7 +92,7 @@ func (b *Builder) buildWorkspaceImage(ctx context.Context, cl *client.Client) (e
 	logs.Warn.SetOutput(os.Stderr)
 	logs.Progress.SetOutput(os.Stderr)
 
-	return crane.Copy(b.Config.BaseRef, b.Config.TargetRef, crane.Insecure)
+	return crane.Copy(b.Config.BaseRef, b.Config.TargetRef, crane.Insecure, crane.WithJobs(runtime.GOMAXPROCS(0)))
 	// contextDir, err := os.MkdirTemp("", "wsimg-*")
 	// if err != nil {
 	// 	return err

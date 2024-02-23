@@ -228,15 +228,48 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 
 	// resolve build request authentication
 	reqauth := o.AuthResolver.ResolveRequestAuth(req.Auth)
-	baseref := req.BaseImageNameResolved
-	if baseref == "" {
-		baseref, err = o.getBaseImageRef(ctx, req.Source, reqauth)
-		if _, ok := status.FromError(err); err != nil && ok {
-			return err
-		}
+	if req.BaseImageNameResolved != "" && !req.GetForceRebuild() {
+		wsrefstr, err := o.getWorkspaceImageRef(ctx, req.BaseImageNameResolved)
 		if err != nil {
-			return status.Errorf(codes.Internal, "cannot resolve base image: %s", err.Error())
+			return status.Errorf(codes.Internal, "cannot produce workspace image ref: %q", err)
 		}
+		wsrefAuth, err := auth.AllowedAuthForAll().GetAuthFor(ctx, o.Auth, wsrefstr)
+		if err != nil {
+			return status.Errorf(codes.Internal, "cannot get workspace image authentication: %q", err)
+		}
+
+		// check if needs build -> early return
+		exists, err := o.checkImageExists(ctx, wsrefstr, wsrefAuth)
+		if err != nil {
+			return status.Errorf(codes.Internal, "cannot check if image is already built: %q", err)
+		}
+		if exists {
+			err = resp.Send(&protocol.BuildResponse{
+				Status:  protocol.BuildStatus_done_success,
+				Ref:     wsrefstr,
+				BaseRef: req.BaseImageNameResolved,
+			})
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		baseref, err := o.getAbsoluteImageRef(ctx, req.BaseImageNameResolved, reqauth)
+		if err == nil {
+			req.Source.From = &protocol.BuildSource_Ref{
+				Ref: &protocol.BuildSourceReference{
+					Ref: baseref,
+				},
+			}
+		}
+	}
+
+	baseref, err := o.getBaseImageRef(ctx, req.Source, reqauth)
+	if _, ok := status.FromError(err); err != nil && ok {
+		return err
+	}
+	if err != nil {
+		return status.Errorf(codes.Internal, "cannot resolve base image: %s", err.Error())
 	}
 
 	wsrefstr, err := o.getWorkspaceImageRef(ctx, baseref)

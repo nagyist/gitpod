@@ -254,7 +254,7 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 			}
 			return nil
 		}
-		baseref, err := o.getAbsoluteImageRef(ctx, req.BaseImageNameResolved, reqauth)
+		baseref, err := o.getAbsoluteImageRef(ctx, req.BaseImageNameResolved, auth.AllowedAuthForAll())
 		if err == nil {
 			req.Source.From = &protocol.BuildSource_Ref{
 				Ref: &protocol.BuildSourceReference{

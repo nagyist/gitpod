@@ -39,7 +39,6 @@ message Project {
 message ProjectSettings {
   PrebuildSettings prebuild = 1;
   WorkspaceSettings workspace = 2;
-  RestrictionSettings restriction = 3;
 }
 
 message PrebuildSettings {
@@ -58,15 +57,12 @@ message PrebuildSettings {
 message WorkspaceSettings {
   bool enable_persistent_volume_claim = 1;
   WorkspaceClassSettings workspace_class = 2;
+  repeated string restricted_workspace_classes = 3;
 }
 
 message WorkspaceClassSettings {
   string regular = 1;
   string prebuild = 2;
-}
-
-message RestrictionSettings {
-  repeated string allowed_workspace_classes = 1;
 }
 
 service ProjectsService {

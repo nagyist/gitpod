@@ -32,7 +32,6 @@ import { daysBefore, isDateSmaller } from "@gitpod/gitpod-protocol/lib/util/time
 import deepmerge from "deepmerge";
 import { ScmService } from "../scm/scm-service";
 import { runWithSubjectId } from "../util/request-context";
-import { LazyOrganizationService } from "../orgs/lazy-organization-service";
 import { InstallationService } from "../auth/installation-service";
 
 const MAX_PROJECT_NAME_LENGTH = 100;
@@ -47,7 +46,6 @@ export class ProjectsService {
         @inject(Authorizer) private readonly auth: Authorizer,
         @inject(ScmService) private readonly scmService: ScmService,
 
-        @inject(LazyOrganizationService) private readonly organizationService: LazyOrganizationService,
         @inject(InstallationService) private readonly installationService: InstallationService,
     ) {}
 
@@ -412,56 +410,35 @@ export class ProjectsService {
         // (not update setting field if undefined)
         if (partialProject.settings) {
             const toBeMerged: ProjectSettings = existingProject.settings ?? {};
-            if (partialProject.settings.allowedWorkspaceClasses) {
+            if (partialProject.settings.restrictedWorkspaceClasses) {
                 // deepmerge will try append array, so once data is defined, ignore previous value
-                toBeMerged.allowedWorkspaceClasses = undefined;
+                toBeMerged.restrictedWorkspaceClasses = undefined;
             }
             partialProject.settings = deepmerge(toBeMerged, partialProject.settings);
-            await this.checkProjectSettings(user.id, existingProject, partialProject.settings);
+            await this.checkProjectSettings(user.id, partialProject.settings);
         }
         await this.handleEnablePrebuild(user, partialProject);
         return this.projectDB.updateProject(partialProject);
     }
-
-    private async checkProjectSettings(
-        userId: string,
-        project: Pick<Project, "teamId">,
-        settings?: PartialProject["settings"],
-    ) {
+    private async checkProjectSettings(userId: string, settings?: PartialProject["settings"]) {
         if (!settings) {
             return;
         }
-        if (settings.allowedWorkspaceClasses) {
-            const classList = settings.allowedWorkspaceClasses.filter((cls) => !!cls) as string[];
-            const checkClassesAllowed = (
-                clsList: string[],
-                allClasses: string[],
-                errorScope: "organization" | "installation",
-            ) => {
-                const notAllowedList = clsList.filter((cls) => !allClasses.includes(cls));
+        if (settings.restrictedWorkspaceClasses) {
+            const classList = settings.restrictedWorkspaceClasses.filter((cls) => !!cls) as string[];
+            if (classList.length > 0) {
+                // We don't check organization-level workspace classes since the field `restrictedWorkspaceClasses` in repository-level is a NOT ALLOW LIST
+                const allClasses = await this.installationService.getInstallationWorkspaceClasses(userId);
+                const notAllowedList = classList.filter((cls) => !allClasses.find((i) => i.id === cls));
                 if (notAllowedList.length > 0) {
                     throw new ApplicationError(
                         ErrorCodes.BAD_REQUEST,
-                        `Workspace classes: ${notAllowedList.join(", ")} not allowed in ${errorScope}`,
-                    );
-                }
-            };
-            if (classList.length > 0) {
-                const orgSettings = await this.organizationService.getSettings(userId, project.teamId);
-                if (orgSettings.allowedWorkspaceClasses && orgSettings.allowedWorkspaceClasses.length > 0) {
-                    checkClassesAllowed(classList, orgSettings.allowedWorkspaceClasses, "organization");
-                } else {
-                    const allClasses = await this.installationService.getInstallationWorkspaceClasses(userId);
-                    checkClassesAllowed(
-                        classList,
-                        allClasses.map((e) => e.id),
-                        "installation",
+                        `Workspace classes: ${notAllowedList.join(", ")} not allowed in installation`,
                     );
                 }
             }
-            settings.allowedWorkspaceClasses = classList;
+            settings.restrictedWorkspaceClasses = classList;
         }
-        // place for editors
     }
 
     private async handleEnablePrebuild(user: User, partialProject: PartialProject): Promise<void> {

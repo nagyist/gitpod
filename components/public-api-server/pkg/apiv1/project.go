@@ -172,7 +172,6 @@ func projectSettingsToAPIResponse(s *protocol.ProjectSettings) *v1.ProjectSettin
 		Workspace: &v1.WorkspaceSettings{
 			WorkspaceClass: workspaceClassesToAPIResponse(s.WorkspaceClasses),
 		},
-		Restriction: &v1.RestrictionSettings{},
 	}
 	if s.PrebuildSettings != nil {
 		settings.Prebuild.EnablePrebuilds = s.PrebuildSettings.Enable
@@ -181,8 +180,8 @@ func projectSettingsToAPIResponse(s *protocol.ProjectSettings) *v1.ProjectSettin
 		settings.Prebuild.PrebuildInterval = s.PrebuildSettings.PrebuildInterval
 		settings.Prebuild.WorkspaceClass = s.PrebuildSettings.WorkspaceClass
 	}
-	if s.AllowedWorkspaceClasses != nil {
-		settings.Restriction.AllowedWorkspaceClasses = *s.AllowedWorkspaceClasses
+	if s.RestrictedWorkspaceClasses != nil {
+		settings.Workspace.RestrictedWorkspaceClasses = *s.RestrictedWorkspaceClasses
 	}
 
 	return settings

@@ -143,18 +143,11 @@ export class WorkspaceService {
                 );
             }
         }
-        if (project?.settings?.allowedWorkspaceClasses && project.settings.allowedWorkspaceClasses.length > 0) {
-            if (!project.settings.allowedWorkspaceClasses.includes(workspaceClass)) {
-                const hasOtherOptions = checkHasOtherOptions(project.settings.allowedWorkspaceClasses);
-                if (!hasOtherOptions) {
-                    throw new ApplicationError(
-                        ErrorCodes.PRECONDITION_FAILED,
-                        "No allowed workspace classes available for current configuration. Please contact an admin to update configuration settings.",
-                    );
-                }
+        if (project?.settings?.restrictedWorkspaceClasses && project.settings.restrictedWorkspaceClasses.length > 0) {
+            if (project.settings.restrictedWorkspaceClasses.includes(workspaceClass)) {
                 throw new ApplicationError(
                     ErrorCodes.PRECONDITION_FAILED,
-                    "Selected workspace class is not allowed in current configuration.",
+                    "Selected workspace class is restricted in current configuration.",
                 );
             }
         }

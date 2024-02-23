@@ -22,9 +22,9 @@ export interface ProjectSettings {
     workspaceClasses?: WorkspaceClasses;
 
     /**
-     * Controls workspace class restriction for this project. Empty array to allow all kind of workspace classes
+     * Controls workspace class restriction for this project, the list is a NOT ALLOW LIST. Empty array to allow all kind of workspace classes
      */
-    allowedWorkspaceClasses?: string[];
+    restrictedWorkspaceClasses?: string[];
 }
 export namespace PrebuildSettings {
     export type BranchStrategy = "default-branch" | "all-branches" | "matched-branches";
@@ -105,11 +105,6 @@ export namespace Project {
 
     export function hasPrebuildSettings(project: Project) {
         return !(typeof project.settings?.prebuilds === "undefined");
-    }
-
-    // Export a fuction about allowedWorkspaceClasses on projects level
-    export function getAllowedWorkspaceClasses(project: Project) {
-        return project.settings?.allowedWorkspaceClasses ?? [];
     }
 
     export interface Overview {

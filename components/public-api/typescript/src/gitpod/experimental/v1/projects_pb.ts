@@ -111,11 +111,6 @@ export class ProjectSettings extends Message<ProjectSettings> {
    */
   workspace?: WorkspaceSettings;
 
-  /**
-   * @generated from field: gitpod.experimental.v1.RestrictionSettings restriction = 3;
-   */
-  restriction?: RestrictionSettings;
-
   constructor(data?: PartialMessage<ProjectSettings>) {
     super();
     proto3.util.initPartial(data, this);
@@ -126,7 +121,6 @@ export class ProjectSettings extends Message<ProjectSettings> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "prebuild", kind: "message", T: PrebuildSettings },
     { no: 2, name: "workspace", kind: "message", T: WorkspaceSettings },
-    { no: 3, name: "restriction", kind: "message", T: RestrictionSettings },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ProjectSettings {
@@ -221,6 +215,11 @@ export class WorkspaceSettings extends Message<WorkspaceSettings> {
    */
   workspaceClass?: WorkspaceClassSettings;
 
+  /**
+   * @generated from field: repeated string restricted_workspace_classes = 3;
+   */
+  restrictedWorkspaceClasses: string[] = [];
+
   constructor(data?: PartialMessage<WorkspaceSettings>) {
     super();
     proto3.util.initPartial(data, this);
@@ -231,6 +230,7 @@ export class WorkspaceSettings extends Message<WorkspaceSettings> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "enable_persistent_volume_claim", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "workspace_class", kind: "message", T: WorkspaceClassSettings },
+    { no: 3, name: "restricted_workspace_classes", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WorkspaceSettings {
@@ -290,43 +290,6 @@ export class WorkspaceClassSettings extends Message<WorkspaceClassSettings> {
 
   static equals(a: WorkspaceClassSettings | PlainMessage<WorkspaceClassSettings> | undefined, b: WorkspaceClassSettings | PlainMessage<WorkspaceClassSettings> | undefined): boolean {
     return proto3.util.equals(WorkspaceClassSettings, a, b);
-  }
-}
-
-/**
- * @generated from message gitpod.experimental.v1.RestrictionSettings
- */
-export class RestrictionSettings extends Message<RestrictionSettings> {
-  /**
-   * @generated from field: repeated string allowed_workspace_classes = 1;
-   */
-  allowedWorkspaceClasses: string[] = [];
-
-  constructor(data?: PartialMessage<RestrictionSettings>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "gitpod.experimental.v1.RestrictionSettings";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "allowed_workspace_classes", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RestrictionSettings {
-    return new RestrictionSettings().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RestrictionSettings {
-    return new RestrictionSettings().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RestrictionSettings {
-    return new RestrictionSettings().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: RestrictionSettings | PlainMessage<RestrictionSettings> | undefined, b: RestrictionSettings | PlainMessage<RestrictionSettings> | undefined): boolean {
-    return proto3.util.equals(RestrictionSettings, a, b);
   }
 }
 

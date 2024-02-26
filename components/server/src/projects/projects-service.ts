@@ -403,9 +403,7 @@ export class ProjectsService {
             throw new ApplicationError(ErrorCodes.NOT_FOUND, `Project ${partialProject.id} not found.`);
         }
 
-        // TODO(sd): Change to code below looks reasonable?
-        // TODO(sd): Need to verify edge cases (no setting field on existingProject / not update settings)
-
+        let isImportantSettingUpdate = false;
         // Merge settings so that clients don't need to pass previous value all the time
         // (not update setting field if undefined)
         if (partialProject.settings) {
@@ -413,9 +411,13 @@ export class ProjectsService {
             if (partialProject.settings.restrictedWorkspaceClasses) {
                 // deepmerge will try append array, so once data is defined, ignore previous value
                 toBeMerged.restrictedWorkspaceClasses = undefined;
+                isImportantSettingUpdate = true;
             }
             partialProject.settings = deepmerge(toBeMerged, partialProject.settings);
             await this.checkProjectSettings(user.id, partialProject.settings);
+        }
+        if (isImportantSettingUpdate) {
+            await this.auth.checkPermissionOnProject(user.id, "write_important_info", partialProject.id);
         }
         await this.handleEnablePrebuild(user, partialProject);
         return this.projectDB.updateProject(partialProject);

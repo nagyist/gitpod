@@ -413,7 +413,6 @@ export default function ProjectSettingsView() {
                     </div>
                 </div>
             </div>
-            {/* TODO(sd): Add dashboard UX changes */}
             <div>
                 <Heading2 className="mt-12">Remove Project</Heading2>
                 <Subheading className="pb-4 max-w-md">

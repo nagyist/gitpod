@@ -58,7 +58,7 @@ export const ConfigurationWorkspaceSizeOptions = ({ configuration }: Props) => {
                 <Heading3>Workspace size options</Heading3>
                 <Subheading>Choose the size of your workspace based on the resources you need.</Subheading>
 
-                {/* TODO(sd): Options below should be shown according to class restriction too */}
+                {/* TODO(huiwen): Options below should be shown according to class restriction too */}
                 <WorkspaceClassOptions value={selectedValue} onChange={setSelectedValue} />
 
                 <LoadingButton
@@ -69,7 +69,7 @@ export const ConfigurationWorkspaceSizeOptions = ({ configuration }: Props) => {
                 >
                     Save
                 </LoadingButton>
-                {/* TODO(sd): Add workspace class restriction here or add it as a new menu item `Restriction` */}
+                {/* TODO(huiwen): Add workspace class restriction here or add it as a new menu item `Restriction` */}
             </form>
         </ConfigurationSettingsField>
     );

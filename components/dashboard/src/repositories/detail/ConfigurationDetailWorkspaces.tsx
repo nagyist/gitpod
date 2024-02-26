@@ -5,12 +5,13 @@
  */
 
 import { FC } from "react";
-import { ConfigurationWorkspaceSizeOptions } from "./workspaces/WorkpaceSizeOptions";
+// import { ConfigurationWorkspaceSizeOptions } from "./workspaces/WorkpaceSizeOptions";
 import { Configuration } from "@gitpod/public-api/lib/gitpod/v1/configuration_pb";
+import { ConfigurationWorkspaceClassesOptions } from "./workspaces/WorkspaceClassesOptions";
 
 type Props = {
     configuration: Configuration;
 };
 export const ConfigurationDetailWorkspaces: FC<Props> = ({ configuration }) => {
-    return <ConfigurationWorkspaceSizeOptions configuration={configuration} />;
+    return <ConfigurationWorkspaceClassesOptions configuration={configuration} />;
 };

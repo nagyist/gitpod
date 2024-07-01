@@ -121,7 +121,7 @@ import {
 } from "@gitpod/usage-api/lib/usage/v1/billing.pb";
 import { ClientError } from "nice-grpc-common";
 import { BillingModes } from "../billing/billing-mode";
-import { Authorizer, SYSTEM_USER, SYSTEM_USER_ID, isFgaChecksEnabled } from "../authorization/authorizer";
+import { Authorizer, SYSTEM_USER, SYSTEM_USER_ID } from "../authorization/authorizer";
 import { OrganizationService } from "../orgs/organization-service";
 import { RedisSubscriber } from "../messaging/redis-subscriber";
 import { UsageService } from "../orgs/usage-service";
@@ -446,20 +446,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
     ): Promise<{ verificationId: string }> {
         const user = await this.checkUser("sendPhoneNumberVerificationToken");
 
-        // Check if verify via call is enabled
-        const phoneVerificationByCall = await getExperimentsClientForBackend().getValueAsync(
-            "phoneVerificationByCall",
-            false,
-            {
-                user: {
-                    id: user.id,
-                    email: getPrimaryEmail(user),
-                },
-            },
-        );
-
-        const channel = phoneVerificationByCall ? "call" : "sms";
-
+        const channel = "call";
         const verificationId = await this.verificationService.sendVerificationToken(
             user.id,
             formatPhoneNumber(rawPhoneNumber),
@@ -547,25 +534,6 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const user = await this.checkUser("getWorkspace");
 
         const result = await this.workspaceService.getWorkspace(user.id, workspaceId);
-        const { workspace, latestInstance } = result;
-
-        // We must not try to fetch the team members if the user is FGA enabled, ebcause this might be a shared workspace, where the user has access to the workspace but not to the org.
-        if (!(await isFgaChecksEnabled(user.id))) {
-            const teamMembers = await this.organizationService.listMembers(user.id, workspace.organizationId);
-            await this.guardAccess({ kind: "workspace", subject: workspace, teamMembers: teamMembers }, "get");
-            if (!!latestInstance) {
-                await this.guardAccess(
-                    {
-                        kind: "workspaceInstance",
-                        subject: latestInstance,
-                        workspace,
-                        teamMembers,
-                    },
-                    "get",
-                );
-            }
-        }
-
         return {
             ...result,
             latestInstance: this.censorInstance(result.latestInstance),
@@ -1119,8 +1087,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
 
         // TODO(gpl) Remove entirely after FGA rollout
         const logCtx: LogContext = { userId: user.id, workspaceId };
-        // eslint-disable-next-line prefer-const
-        let { instance, workspace } = await this.internGetCurrentWorkspaceInstance(ctx, user, workspaceId);
+        const { instance, workspace } = await this.internGetCurrentWorkspaceInstance(ctx, user, workspaceId);
         if (!instance) {
             log.debug(logCtx, `No running instance for workspaceId.`);
             return;
@@ -1697,7 +1664,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         if (!prebuild) {
             throw new ApplicationError(ErrorCodes.NOT_FOUND, "Prebuild not found");
         }
-        // Explicitly stopping the prebuild workspace now automaticaly cancels the prebuild
+        // Explicitly stopping the prebuild workspace now automatically cancels the prebuild
         await this.stopWorkspace(ctx, prebuild.buildWorkspaceId);
     }
 
@@ -2277,7 +2244,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
             if (ApplicationError.hasErrorCode(error)) {
                 throw error;
             }
-            const message = error ? String(error) : "Error retreiving auth providers for organization.";
+            const message = error ? String(error) : "Error retrieving auth providers for organization.";
             throw new ApplicationError(ErrorCodes.INTERNAL_SERVER_ERROR, message);
         }
     }
@@ -2496,7 +2463,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         try {
@@ -2589,7 +2556,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         await this.guardTeamOperation(attrId.teamId, "update");
@@ -2623,7 +2590,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         try {
@@ -2671,7 +2638,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         const returnUrl = this.config.hostUrl
@@ -2697,7 +2664,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         const user = await this.checkAndBlockUser("getCostCenter");
@@ -2711,7 +2678,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
         if (typeof usageLimit !== "number" || usageLimit < 0) {
             throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Unexpected usageLimit value: ${usageLimit}`);
@@ -2779,7 +2746,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         const user = await this.checkAndBlockUser("isCustomerBillingAddressInvalid");
@@ -2816,7 +2783,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
 
         const user = await this.checkAndBlockUser("adminGetCostCenter");
@@ -2829,7 +2796,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
         const adminUser = await this.checkAndBlockUser("adminSetUsageLimit");
         await this.guardAdminAccess("adminSetUsageLimit", { id: adminUser.id }, Permission.ADMIN_USERS);
@@ -2849,7 +2816,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
         const user = await this.checkAndBlockUser("adminGetUsageBalance");
         await this.guardAdminAccess("adminGetUsageBalance", { id: user.id }, Permission.ADMIN_USERS);
@@ -2867,7 +2834,7 @@ export class GitpodServerImpl implements GitpodServerWithTracing, Disposable {
         const attrId = AttributionId.parse(attributionId);
         if (attrId === undefined) {
             log.error(`Invalid attribution id: ${attributionId}`);
-            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attibution id: ${attributionId}`);
+            throw new ApplicationError(ErrorCodes.BAD_REQUEST, `Invalid attribution id: ${attributionId}`);
         }
         const user = await this.checkAndBlockUser("adminAddUsageCreditNote");
         await this.guardAdminAccess("adminAddUsageCreditNote", { id: user.id }, Permission.ADMIN_USERS);

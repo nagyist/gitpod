@@ -12,6 +12,7 @@ import {
     TeamMemberInfo,
     User,
     Workspace,
+    WorkspaceImageBuild,
     WorkspaceInstance,
 } from "@gitpod/gitpod-protocol";
 import { log } from "@gitpod/gitpod-protocol/lib/util/logging";
@@ -46,7 +47,6 @@ import { SubjectId } from "../auth/subject-id";
 import { PrebuildManager } from "../prebuilds/prebuild-manager";
 import { validate as uuidValidate } from "uuid";
 import { getPrebuildErrorMessage } from "@gitpod/public-api-common/lib/prebuild-utils";
-import { isFgaChecksEnabled } from "../authorization/authorizer";
 
 @injectable()
 export class HeadlessLogController {
@@ -193,7 +193,91 @@ export class HeadlessLogController {
         const router = express.Router();
 
         router.use(this.auth.restHandlerOptionally);
-        router.get("/:prebuildId", [
+        router.get("/:workspaceId/image-build", [
+            authenticateAndAuthorize,
+            asyncHandler(async (req: express.Request, res: express.Response) => {
+                const span = opentracing.globalTracer().startSpan(HEADLESS_LOGS_PATH_PREFIX);
+                const user = req.user as User;
+
+                await runWithSubjectId(SubjectId.fromUserId(user.id), async () => {
+                    const { workspaceId } = req.params;
+                    const subjectId = ctxTrySubjectId();
+                    if (!subjectId) {
+                        res.status(403).send("unauthorized");
+                        return;
+                    }
+
+                    const logCtx = { userId: user.id, workspaceId };
+                    const head = {
+                        "Content-Type": "text/html; charset=utf-8", // is text/plain, but with that node.js won't stream...
+                        "Transfer-Encoding": "chunked",
+                        "Cache-Control": "no-cache, no-store, must-revalidate", // make sure stream are not re-used on reconnect
+                    };
+                    res.writeHead(200, head);
+
+                    let hasWritten = false;
+
+                    const abortController = new AbortController();
+                    const queue = new Queue(); // Make sure we forward in the correct order
+                    const writeToResponse = async (chunk: string) =>
+                        queue.enqueue(
+                            () =>
+                                new Promise<void>((resolve) => {
+                                    if (ctxIsAborted()) {
+                                        return;
+                                    }
+                                    const done = res.write(chunk, "utf-8", (err?: Error | null) => {
+                                        if (err) {
+                                            // we don't reject in current promise to avoid floating error throws
+                                            abortController.abort("Failed to write chunk");
+                                            return;
+                                        }
+                                    });
+                                    hasWritten = true;
+
+                                    if (!done) {
+                                        res.once("drain", resolve);
+                                    } else {
+                                        setImmediate(resolve);
+                                    }
+                                }),
+                        );
+
+                    const client = {
+                        onWorkspaceImageBuildLogs: async (
+                            _info: WorkspaceImageBuild.StateInfo,
+                            content?: WorkspaceImageBuild.LogContent,
+                        ) => {
+                            if (!content) return;
+
+                            await writeToResponse(content.text);
+                        },
+                    };
+
+                    try {
+                        await runWithSubSignal(abortController, async () => {
+                            await this.workspaceService.watchWorkspaceImageBuildLogs(user.id, workspaceId, client);
+                        });
+                    } catch (e) {
+                        log.error(logCtx, "error streaming headless logs", e);
+                        TraceContext.setError({ span }, e);
+                        await writeToResponse(getPrebuildErrorMessage(e)).catch(() => {});
+                    } finally {
+                        if (!hasWritten) {
+                            res.write(
+                                getPrebuildErrorMessage(
+                                    new ApplicationError(ErrorCodes.NOT_FOUND, "No image build logs found"),
+                                ),
+                            );
+                        }
+
+                        span.finish();
+                        res.end();
+                    }
+                });
+            }),
+        ]);
+        router.get("/:prebuildId/:taskId?", [
             authenticateAndAuthorize,
             asyncHandler(async (req: express.Request, res: express.Response) => {
                 const span = opentracing.globalTracer().startSpan(PREBUILD_LOGS_PATH_PREFIX);
@@ -202,7 +286,7 @@ export class HeadlessLogController {
                 await runWithSubjectId(SubjectId.fromUserId(user.id), async () => {
                     // ensure fga migration
                     const subjectId = ctxTrySubjectId();
-                    if (!subjectId || !(await isFgaChecksEnabled(subjectId))) {
+                    if (!subjectId) {
                         res.status(403).send("unauthorized");
                         return;
                     }
@@ -212,7 +296,8 @@ export class HeadlessLogController {
                         res.status(400).send("prebuildId is invalid");
                         return;
                     }
-                    const logCtx = { userId: user.id, prebuildId };
+                    const { taskId } = req.params;
+                    const logCtx = { userId: user.id, prebuildId, taskId };
 
                     const head = {
                         "Content-Type": "text/html; charset=utf-8", // is text/plain, but with that node.js won't stream...
@@ -246,7 +331,7 @@ export class HeadlessLogController {
                         );
                     try {
                         await runWithSubSignal(abortController, async () => {
-                            await this.prebuildManager.watchPrebuildLogs(user.id, prebuildId, writeToResponse);
+                            await this.prebuildManager.watchPrebuildLogs(user.id, prebuildId, taskId, writeToResponse);
                         });
                     } catch (e) {
                         log.error(logCtx, "error streaming headless logs", e);

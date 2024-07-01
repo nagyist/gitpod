@@ -201,10 +201,7 @@ func Run(options ...RunOption) {
 
 	// BEWARE: we can only call buildChildProcEnv once, because it might download env vars from a one-time-secret
 	//         URL, which would fail if we tried another time.
-	isSetJavaXmx := experiments.IsSetJavaXmx(context.Background(), exps, experiments.Attributes{
-		UserID: cfg.OwnerId,
-	})
-	childProcEnvvars = buildChildProcEnv(cfg, nil, opts.RunGP, isSetJavaXmx)
+	childProcEnvvars = buildChildProcEnv(cfg, nil, opts.RunGP)
 
 	err = AddGitpodUserIfNotExists()
 	if err != nil {
@@ -281,7 +278,7 @@ func Run(options ...RunOption) {
 			OwnerID:           cfg.OwnerId,
 			SupervisorVersion: Version,
 			ConfigcatEnabled:  cfg.ConfigcatEnabled,
-		}, tokenService, exps)
+		}, tokenService)
 	}
 
 	if cfg.GetDesktopIDE() != nil {
@@ -338,6 +335,7 @@ func Run(options ...RunOption) {
 		}
 	}
 
+	willShutdownCtx, fireWillShutdown := context.WithCancel(ctx)
 	termMux := terminal.NewMux()
 	termMuxSrv := terminal.NewMuxTerminalService(termMux)
 	termMuxSrv.DefaultWorkdir = cfg.RepoRoot
@@ -375,7 +373,8 @@ func Run(options ...RunOption) {
 		go gitStatusService.Run(gitStatusCtx, gitStatusWg)
 	}
 
-	willShutdownCtx, fireWillShutdown := context.WithCancel(ctx)
+	taskServiceWg := &sync.WaitGroup{}
+
 	apiServices := []RegisterableService{
 		&statusService{
 			willShutdownCtx: willShutdownCtx,
@@ -392,6 +391,11 @@ func Run(options ...RunOption) {
 		NewInfoService(cfg, cstate, gitpodService),
 		&ControlService{portsManager: portMgmt},
 		&portService{portsManager: portMgmt},
+		&taskService{
+			wg:              taskServiceWg,
+			tasksManager:    taskManager,
+			willShutdownCtx: willShutdownCtx,
+		},
 	}
 	apiServices = append(apiServices, additionalServices...)
 
@@ -520,6 +524,11 @@ func Run(options ...RunOption) {
 	stopGitStatus()
 	gitStatusWg.Wait()
 
+	cleanExit := waitWithTimeout(taskServiceWg, 2*time.Second)
+	if !cleanExit {
+		log.Warn("task service did not finish in time, force closing")
+	}
+
 	terminalShutdownCtx, cancelTermination := context.WithTimeout(context.Background(), cfg.GetTerminationGracePeriod())
 	defer cancelTermination()
 	cancel()
@@ -528,6 +537,21 @@ func Run(options ...RunOption) {
 	termMux.Close(terminalShutdownCtx)
 
 	wg.Wait()
+}
+
+// Based off of https://stackoverflow.com/questions/32840687/timeout-for-waitgroup-wait/32843750#32843750
+func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
 }
 
 func getIDENotReadyShutdownDuration(ctx context.Context, exps experiments.Client, gitpodHost string) (bool, time.Duration) {
@@ -1030,7 +1054,7 @@ func prepareIDELaunch(cfg *Config, ideConfig *IDEConfig) *exec.Cmd {
 // of envvars. If envvars is nil, os.Environ() is used.
 //
 // Beware: if config contains an OTS URL the results may differ on subsequent calls.
-func buildChildProcEnv(cfg *Config, envvars []string, runGP bool, setJavaXmx bool) []string {
+func buildChildProcEnv(cfg *Config, envvars []string, runGP bool) []string {
 	if envvars == nil {
 		envvars = os.Environ()
 	}
@@ -1106,8 +1130,18 @@ func buildChildProcEnv(cfg *Config, envvars []string, runGP bool, setJavaXmx boo
 	envs["HOME"] = "/home/gitpod"
 	envs["USER"] = "gitpod"
 
+	if cpuCount, ok := envs["GITPOD_CPU_COUNT"]; ok && cfg.IsSetJavaProcessorCount {
+		if _, exists := envs["JAVA_TOOL_OPTIONS"]; exists {
+			// check if the JAVA_TOOL_OPTIONS already contains the ActiveProcessorCount flag
+			if !strings.Contains(envs["JAVA_TOOL_OPTIONS"], "-XX:ActiveProcessorCount=") {
+				envs["JAVA_TOOL_OPTIONS"] += fmt.Sprintf(" -XX:+UseContainerSupport -XX:ActiveProcessorCount=%s", cpuCount)
+			}
+		} else {
+			envs["JAVA_TOOL_OPTIONS"] = fmt.Sprintf("-XX:+UseContainerSupport -XX:ActiveProcessorCount=%s", cpuCount)
+		}
+	}
 	// Particular Java optimisation: Java pre v10 did not gauge it's available memory correctly, and needed explicitly setting "-Xmx" for all Hotspot/openJDK VMs
-	if mem, ok := envs["GITPOD_MEMORY"]; ok && setJavaXmx {
+	if mem, ok := envs["GITPOD_MEMORY"]; ok && cfg.IsSetJavaXmx {
 		envs["JAVA_TOOL_OPTIONS"] += fmt.Sprintf(" -Xmx%sm", mem)
 	}
 
@@ -1350,7 +1384,7 @@ func startAPIEndpoint(
 			reg.RegisterGRPC(grpcServer)
 		}
 		if reg, ok := reg.(RegisterableRESTService); ok {
-			err := reg.RegisterREST(restMux, grpcEndpoint)
+			err := reg.RegisterREST(ctx, restMux, grpcEndpoint)
 			if err != nil {
 				log.WithError(err).Fatal("cannot register REST service")
 			}
@@ -1466,13 +1500,19 @@ func startAPIEndpoint(
 		}))
 		routes.Handle("/_supervisor"+pprof.Path, http.StripPrefix("/_supervisor", pprof.Handler()))
 	}
-	go http.Serve(httpMux, routes)
+
+	server := &http.Server{Handler: routes}
+	go func(l net.Listener) {
+		if err := server.Serve(l); err != http.ErrServerClosed {
+			log.WithError(err).Error("API endpoint closed")
+		}
+	}(httpMux)
 
 	go m.Serve()
 
 	<-ctx.Done()
 	log.Info("shutting down API endpoint")
-	l.Close()
+	server.Shutdown(ctx)
 }
 
 func tunnelOverWebSocket(tunneled *ports.TunneledPortsService, conn *gitpod.WebsocketConnection) {

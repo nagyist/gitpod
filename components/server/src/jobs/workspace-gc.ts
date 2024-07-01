@@ -43,16 +43,16 @@ export class WorkspaceGarbageCollector implements Job {
         this.frequencyMs = this.config.workspaceGarbageCollection.intervalSeconds * 1000;
     }
 
-    public async run(): Promise<void> {
+    public async run(): Promise<number | undefined> {
         if (this.config.workspaceGarbageCollection.disabled) {
             log.info("workspace-gc: Garbage collection disabled.");
             return;
         }
 
         try {
-            await this.softDeleteOldWorkspaces();
+            await this.softDeleteEligibleWorkspaces();
         } catch (error) {
-            log.error("workspace-gc: error during garbage collection", error);
+            log.error("workspace-gc: error during eligible workspace deletion", error);
         }
         try {
             await this.deleteWorkspaceContentAfterRetentionPeriod();
@@ -65,42 +65,52 @@ export class WorkspaceGarbageCollector implements Job {
             log.error("workspace-gc: error during hard deletion of workspaces", err);
         }
         try {
+            //TODO (se) delete this end of June 2024
             await this.deleteOldPrebuilds();
         } catch (err) {
             log.error("workspace-gc: error during prebuild deletion", err);
         }
+        try {
+            await this.deleteEligiblePrebuilds();
+        } catch (err) {
+            log.error("workspace-gc: error during eligible prebuild deletion", err);
+        }
+
+        return undefined;
     }
 
-    /**
-     * Marks old, unused workspaces as softDeleted
-     */
-    private async softDeleteOldWorkspaces() {
+    private async softDeleteEligibleWorkspaces() {
         if (Date.now() < this.config.workspaceGarbageCollection.startDate) {
             log.info("workspace-gc: garbage collection not yet active.");
             return;
         }
 
-        const span = opentracing.globalTracer().startSpan("softDeleteOldWorkspaces");
+        const span = opentracing.globalTracer().startSpan("softDeleteEligibleWorkspaces");
         try {
             const now = new Date();
             const workspaces = await this.workspaceDB
                 .trace({ span })
-                .findWorkspacesForGarbageCollection(
-                    this.config.workspaceGarbageCollection.minAgeDays,
+                .findEligibleWorkspacesForSoftDeletion(
+                    now,
                     this.config.workspaceGarbageCollection.chunkLimit,
+                    "regular",
                 );
             const afterSelect = new Date();
-            log.info(`workspace-gc: about to soft-delete ${workspaces.length} workspaces`);
+            log.info(`workspace-gc: about to soft-delete ${workspaces.length} eligible workspaces`);
             for (const ws of workspaces) {
                 try {
                     await this.workspaceService.deleteWorkspace(SYSTEM_USER_ID, ws.id, "gc");
                 } catch (err) {
-                    log.error({ workspaceId: ws.id }, "workspace-gc: error during workspace soft-deletion", err);
+                    log.error(
+                        { workspaceId: ws.id },
+                        "workspace-gc: error during eligible workspace soft-deletion",
+                        err,
+                    );
                 }
             }
             const afterDelete = new Date();
 
-            log.info(`workspace-gc: successfully soft-deleted ${workspaces.length} workspaces`, {
+            log.info(`workspace-gc: successfully soft-deleted ${workspaces.length} eligible workspaces`, {
                 selectionTimeMs: afterSelect.getTime() - now.getTime(),
                 deletionTimeMs: afterDelete.getTime() - afterSelect.getTime(),
             });
@@ -177,6 +187,41 @@ export class WorkspaceGarbageCollector implements Job {
                 deletionTimeMs: afterDelete.getTime() - afterSelect.getTime(),
             });
             span.addTags({ nrOfCollectedWorkspaces: workspaces.length });
+        } catch (err) {
+            TraceContext.setError({ span }, err);
+            throw err;
+        } finally {
+            span.finish();
+        }
+    }
+
+    private async deleteEligiblePrebuilds() {
+        const span = opentracing.globalTracer().startSpan("deleteEligiblePrebuilds");
+        try {
+            const now = new Date();
+            const workspaces = await this.workspaceDB
+                .trace({ span })
+                .findEligibleWorkspacesForSoftDeletion(
+                    now,
+                    this.config.workspaceGarbageCollection.chunkLimit,
+                    "prebuild",
+                );
+            const afterSelect = new Date();
+            log.info(`workspace-gc: about to delete ${workspaces.length} eligible prebuilds`);
+            for (const ws of workspaces) {
+                try {
+                    await this.garbageCollectPrebuild({ span }, ws);
+                } catch (err) {
+                    log.error({ workspaceId: ws.id }, "workspace-gc: failed to delete eligible prebuild", err);
+                }
+            }
+            const afterDelete = new Date();
+
+            log.info(`workspace-gc: successfully deleted ${workspaces.length} eligible prebuilds`, {
+                selectionTimeMs: afterSelect.getTime() - now.getTime(),
+                deletionTimeMs: afterDelete.getTime() - afterSelect.getTime(),
+            });
+            span.addTags({ nrOfCollectedPrebuilds: workspaces.length });
         } catch (err) {
             TraceContext.setError({ span }, err);
             throw err;

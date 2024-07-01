@@ -273,6 +273,7 @@ func (wsc *WorkspaceController) handleWorkspaceStop(ctx context.Context, ws *wor
 			return ctrl.Result{}, fmt.Errorf("failed to get snapshot name and URL: %w", err)
 		}
 
+		// todo(ft): remove this and only set the snapshot url after the actual backup is done (see L320-322) ENT-319
 		// ws-manager-bridge expects to receive the snapshot url while the workspace
 		// is in STOPPING so instead of breaking the assumptions of ws-manager-bridge
 		// we set the url here and not after the snapshot has been taken as otherwise
@@ -298,9 +299,10 @@ func (wsc *WorkspaceController) handleWorkspaceStop(ctx context.Context, ws *wor
 			WorkspaceID: ws.Spec.Ownership.WorkspaceID,
 			InstanceID:  ws.Name,
 		},
-		SnapshotName:    snapshotName,
-		BackupLogs:      ws.Spec.Type == workspacev1.WorkspaceTypePrebuild,
-		UpdateGitStatus: ws.Spec.Type == workspacev1.WorkspaceTypeRegular,
+		SnapshotName:      snapshotName,
+		BackupLogs:        ws.Spec.Type == workspacev1.WorkspaceTypePrebuild,
+		UpdateGitStatus:   ws.Spec.Type == workspacev1.WorkspaceTypeRegular,
+		SkipBackupContent: ws.Spec.Type == workspacev1.WorkspaceTypePrebuild && ws.IsConditionTrue(workspacev1.WorkspaceConditionsHeadlessTaskFailed),
 	})
 
 	err = retry.RetryOnConflict(retryParams, func() error {
@@ -315,6 +317,9 @@ func (wsc *WorkspaceController) handleWorkspaceStop(ctx context.Context, ws *wor
 			ws.Status.SetCondition(workspacev1.NewWorkspaceConditionBackupFailure(disposeErr.Error()))
 		} else {
 			ws.Status.SetCondition(workspacev1.NewWorkspaceConditionBackupComplete())
+			if ws.Spec.Type != workspacev1.WorkspaceTypeRegular {
+				ws.Status.Snapshot = snapshotUrl
+			}
 		}
 
 		return wsc.Status().Update(ctx, ws)

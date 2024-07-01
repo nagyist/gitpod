@@ -13,8 +13,12 @@ import { ApplicationError, ErrorCode, ErrorCodes } from "@gitpod/gitpod-protocol
  */
 export const PREBUILD_LOGS_PATH_PREFIX = "/prebuild-logs";
 
-export function getPrebuildLogPath(prebuildId: string): string {
-    return PREBUILD_LOGS_PATH_PREFIX + "/" + prebuildId;
+export function getPrebuildLogPath(prebuildId: string, taskId?: string): string {
+    const result = PREBUILD_LOGS_PATH_PREFIX + "/" + prebuildId;
+    if (taskId) {
+        return result + "/" + taskId;
+    }
+    return result;
 }
 
 /** cmp. @const HEADLESS_LOG_STREAM_ERROR_REGEX */
@@ -111,6 +115,7 @@ export function onDownloadPrebuildLogsUrl(
                 // In an ideal world, we'd use res.addTrailers()/response.trailer here. But despite being introduced with HTTP/1.1 in 1999, trailers are not supported by popular proxies (nginx, for example).
                 // So we resort to this hand-written solution:
                 const matches = msg.match(HEADLESS_LOG_STREAM_STATUS_CODE_REGEX);
+                const prebuildMatches = matchPrebuildError(msg);
                 if (matches) {
                     if (matches.length < 2) {
                         console.debug("error parsing log stream status code. msg: " + msg);
@@ -123,6 +128,11 @@ export function onDownloadPrebuildLogsUrl(
                             );
                         }
                     }
+                } else if (prebuildMatches && prebuildMatches.code === ErrorCodes.HEADLESS_LOG_NOT_YET_AVAILABLE) {
+                    // reset backoff because this error is expected
+                    delayInSeconds = initialDelaySeconds;
+                    currentBackoffTimes = 0;
+                    throw prebuildMatches;
                 } else {
                     onLog(msg);
                 }

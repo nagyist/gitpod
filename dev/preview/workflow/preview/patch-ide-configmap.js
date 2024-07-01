@@ -10,7 +10,11 @@ function replaceImage(image) {
 }
 
 for (let ide in json.ideOptions.options) {
-    if (["clion", "goland", "intellij", "phpstorm", "pycharm", "rider", "rubymine", "webstorm"].includes(ide)) {
+    if (
+        ["clion", "goland", "intellij", "phpstorm", "pycharm", "rider", "rubymine", "webstorm", "rustrover"].includes(
+            ide,
+        )
+    ) {
         json.ideOptions.options[ide].versions = json.ideOptions.options[ide].versions?.map((version) => {
             version.image = replaceImage(version.image);
             version.imageLayers = version.imageLayers.map(replaceImage);
@@ -25,10 +29,6 @@ for (let ide in json.ideOptions.options) {
             version.imageLayers = version.imageLayers.map(replaceImage);
             return version;
         });
-    }
-    if (["intellij-previous"].includes(ide)) {
-        json.ideOptions.options[ide].image = replaceImage(json.ideOptions.options[ide].image);
-        json.ideOptions.options[ide].imageLayers = json.ideOptions.options[ide].imageLayers.map((i) => replaceImage(i));
     }
 }
 

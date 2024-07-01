@@ -724,6 +724,12 @@ export interface Workspace {
      */
     contentDeletedTime?: string;
 
+    /**
+     * The time when the workspace is eligible for soft deletion. This is the time when the workspace
+     * is marked as softDeleted earliest.
+     */
+    deletionEligibilityTime?: string;
+
     type: WorkspaceType;
 
     basedOnPrebuildId?: string;
@@ -789,6 +795,7 @@ export interface JetBrainsConfig {
     webstorm?: JetBrainsProductConfig;
     rider?: JetBrainsProductConfig;
     clion?: JetBrainsProductConfig;
+    rustrover?: JetBrainsProductConfig;
 }
 export interface JetBrainsProductConfig {
     prebuilds?: JetBrainsPrebuilds;
@@ -911,6 +918,8 @@ export interface PrebuiltWorkspace {
     error?: string;
     snapshot?: string;
 }
+
+export type PrebuiltWorkspaceWithWorkspace = PrebuiltWorkspace & { workspace: Workspace };
 
 export namespace PrebuiltWorkspace {
     export function isDone(pws: PrebuiltWorkspace) {

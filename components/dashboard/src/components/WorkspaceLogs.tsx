@@ -15,12 +15,14 @@ import { cn } from "@podkit/lib/cn";
 
 const darkTheme: ITheme = {
     // What written on DevTool dark:bg-gray-800 is
-    background: "rgb(35,33,30)", // Tailwind's warmGray 800 https://tailwindcss.com/docs/customizing-colors
+    background: "#23211E", // Tailwind's warmGray 50 https://tailwindcss.com/docs/customizing-colors
+    selectionBackground: "#add6ff26", // https://github.com/gitpod-io/gitpod-vscode-theme/blob/6fb17ba8915fcd68fde3055b4bc60642ce5eed14/themes/gitpod-dark-color-theme.json#L15
 };
 const lightTheme: ITheme = {
-    background: "#F5F5F4", // Tailwind's warmGray 100 https://tailwindcss.com/docs/customizing-colors
+    background: "#F9F9F9", // Tailwind's warmGray 800 https://tailwindcss.com/docs/customizing-colors
     foreground: "#78716C", // Tailwind's warmGray 500 https://tailwindcss.com/docs/customizing-colors
     cursor: "#78716C", // Tailwind's warmGray 500 https://tailwindcss.com/docs/customizing-colors
+    selectionBackground: "#add6ff80", // https://github.com/gitpod-io/gitpod-vscode-theme/blob/6fb17ba8915fcd68fde3055b4bc60642ce5eed14/themes/gitpod-light-color-theme.json#L15
 };
 
 export interface WorkspaceLogsProps {
@@ -51,18 +53,22 @@ export default function WorkspaceLogs(props: WorkspaceLogsProps) {
         terminalRef.current = terminal;
         terminal.loadAddon(fitAddon);
         terminal.open(xTermParentRef.current);
-        props.logsEmitter.on("logs", (logs) => {
+
+        const logListener = (logs: string) => {
             if (terminal && logs) {
                 terminal.write(logs);
             }
-        });
+        };
+
+        const emitter = props.logsEmitter.on("logs", logListener);
         fitAddon.fit();
 
         return () => {
             terminal.dispose();
+            emitter.removeListener("logs", logListener);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [props.logsEmitter]);
 
     const resizeDebounced = debounce(
         () => {
@@ -101,7 +107,7 @@ export default function WorkspaceLogs(props: WorkspaceLogsProps) {
         <div
             className={cn(
                 props.classes || "mt-6 h-72 w-11/12 lg:w-3/5 rounded-xl overflow-hidden",
-                "bg-gray-100 dark:bg-gray-800 relative text-left",
+                "bg-pk-surface-secondary relative text-left",
             )}
         >
             <div

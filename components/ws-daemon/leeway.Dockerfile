@@ -2,7 +2,7 @@
 # Licensed under the GNU Affero General Public License (AGPL).
 # See License.AGPL.txt in the project root for license information.
 
-FROM cgr.dev/chainguard/wolfi-base:latest@sha256:97a9dd83b120b33159b94f79db90cd51a205363305818f737605354b54311974 as dl
+FROM cgr.dev/chainguard/wolfi-base:latest@sha256:34100efe6c082579d51b6d9b4ee53576e4497b7a047502544453d79676a356c3 as dl
 WORKDIR /dl
 RUN apk add --no-cache curl file \
   && curl -OsSL https://github.com/opencontainers/runc/releases/download/v1.1.12/runc.amd64 \
@@ -31,6 +31,7 @@ RUN apt update \
       python3-crcmod \
       aria2 \
       lvm2 \
+      nfs-common \
   && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
   && curl -sSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - \
   && apt update && apt install -y --no-install-recommends  google-cloud-sdk=${CLOUD_SDK_VERSION}-0 \

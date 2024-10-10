@@ -1282,6 +1282,14 @@ export interface Repository {
         // The direct parent of this fork
         parent: Repository;
     };
+    /**
+     * Optional date when the repository was last pushed to.
+     */
+    pushedAt?: string;
+    /**
+     * Optional display name (e.g. for Bitbucket)
+     */
+    displayName?: string;
 }
 
 export interface RepositoryInfo {
@@ -1400,16 +1408,30 @@ export interface OAuth2Config {
 }
 
 export namespace AuthProviderEntry {
-    export type Type = "GitHub" | "GitLab" | "Bitbucket" | "BitbucketServer" | string;
+    export type Type = "GitHub" | "GitLab" | "Bitbucket" | "BitbucketServer" | "AzureDevOps" | string;
     export type Status = "pending" | "verified";
+
+    /**
+     * Some auth providers require additional configuration like Azure DevOps.
+     */
+    export interface OAuth2CustomConfig {
+        /**
+         * The URL to the authorize endpoint of the provider.
+         */
+        authorizationUrl?: string;
+        /**
+         * The URL to the oauth token endpoint of the provider.
+         */
+        tokenUrl?: string;
+    }
     export type NewEntry = Pick<AuthProviderEntry, "ownerId" | "host" | "type"> & {
         clientId?: string;
         clientSecret?: string;
-    };
+    } & OAuth2CustomConfig;
     export type UpdateEntry = Pick<AuthProviderEntry, "id" | "ownerId"> & {
         clientId?: string;
         clientSecret?: string;
-    };
+    } & OAuth2CustomConfig;
     export type NewOrgEntry = NewEntry & {
         organizationId: string;
     };
@@ -1417,8 +1439,8 @@ export namespace AuthProviderEntry {
         clientId?: string;
         clientSecret?: string;
         organizationId: string;
-    };
-    export type UpdateOAuth2Config = Pick<OAuth2Config, "clientId" | "clientSecret">;
+    } & OAuth2CustomConfig;
+    export type UpdateOAuth2Config = Pick<OAuth2Config, "clientId" | "clientSecret"> & OAuth2CustomConfig;
     export function redact(entry: AuthProviderEntry): AuthProviderEntry {
         return {
             ...entry,

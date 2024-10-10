@@ -43,7 +43,6 @@ import {
 import { AuditLog as AuditLogProtocol } from "@gitpod/gitpod-protocol/lib/audit-log";
 import {
     OrgMemberInfo,
-    OrgMemberRole,
     OrganizationSettings as OrganizationSettingsProtocol,
     PartialProject,
     PrebuildSettings as PrebuildSettingsProtocol,
@@ -51,6 +50,8 @@ import {
     Project,
     ProjectSettings,
     Organization as ProtocolOrganization,
+    OrgMemberPermission,
+    OrgMemberRole,
 } from "@gitpod/gitpod-protocol/lib/teams-projects-protocol";
 import type { DeepPartial } from "@gitpod/gitpod-protocol/lib/util/deep-partial";
 import { parseGoDurationToMs } from "@gitpod/gitpod-protocol/lib/util/timeutil";
@@ -87,6 +88,7 @@ import {
     UserEnvironmentVariable,
 } from "@gitpod/public-api/lib/gitpod/v1/envvar_pb";
 import {
+    CellDisabledError,
     FailedPreconditionDetails,
     ImageBuildLogsNotYetAvailableError,
     InvalidCostCenterError as InvalidCostCenterErrorData,
@@ -107,6 +109,7 @@ import {
 import {
     Organization,
     OrganizationMember,
+    OrganizationPermission,
     OrganizationRole,
     OrganizationSettings,
 } from "@gitpod/public-api/lib/gitpod/v1/organization_pb";
@@ -649,6 +652,22 @@ export class PublicAPIConverter {
             if (reason.code === ErrorCodes.INTERNAL_SERVER_ERROR) {
                 return new ConnectError(reason.message, Code.Internal, undefined, undefined, reason);
             }
+            if (reason.code === ErrorCodes.CELL_EXPIRED) {
+                return new ConnectError(
+                    reason.message,
+                    Code.FailedPrecondition,
+                    undefined,
+                    [
+                        new FailedPreconditionDetails({
+                            reason: {
+                                case: "cellIsDisabled",
+                                value: new CellDisabledError(),
+                            },
+                        }),
+                    ],
+                    reason,
+                );
+            }
             return new ConnectError(reason.message, Code.Unknown, undefined, undefined, reason);
         }
         return new ConnectError(`Oops! Something went wrong.`, Code.Internal, undefined, undefined, reason);
@@ -703,6 +722,8 @@ export class PublicAPIConverter {
                     return new ApplicationError(ErrorCodes.HEADLESS_LOG_NOT_YET_AVAILABLE, reason.rawMessage);
                 case "tooManyRunningWorkspaces":
                     return new ApplicationError(ErrorCodes.TOO_MANY_RUNNING_WORKSPACES, reason.rawMessage);
+                case "cellIsDisabled":
+                    return new ApplicationError(ErrorCodes.CELL_EXPIRED, reason.rawMessage);
             }
             return new ApplicationError(ErrorCodes.PRECONDITION_FAILED, reason.rawMessage);
         }
@@ -1054,6 +1075,10 @@ export class PublicAPIConverter {
                     : undefined,
                 denyUserTimeouts: settings.timeoutSettings?.denyUserTimeouts,
             },
+            roleRestrictions: Object.entries(settings.roleRestrictions ?? {}).map(([role, permissions]) => ({
+                role: this.toOrgMemberRole(role as OrgMemberRole),
+                permissions: permissions.map((permission) => this.toOrganizationPermission(permission)),
+            })),
         });
     }
 
@@ -1171,6 +1196,8 @@ export class PublicAPIConverter {
         return new OAuth2Config({
             clientId: ap.oauth?.clientId,
             clientSecret: ap.oauth?.clientSecret,
+            authorizationUrl: ap.oauth?.authorizationUrl,
+            tokenUrl: ap.oauth?.tokenUrl,
         });
     }
 
@@ -1184,6 +1211,8 @@ export class PublicAPIConverter {
                 return AuthProviderType.BITBUCKET;
             case "BitbucketServer":
                 return AuthProviderType.BITBUCKET_SERVER;
+            case "AzureDevOps":
+                return AuthProviderType.AZURE_DEVOPS;
             default:
                 return AuthProviderType.UNSPECIFIED; // not allowed
         }
@@ -1199,6 +1228,8 @@ export class PublicAPIConverter {
                 return "Bitbucket";
             case AuthProviderType.BITBUCKET_SERVER:
                 return "BitbucketServer";
+            case AuthProviderType.AZURE_DEVOPS:
+                return "AzureDevOps";
             default:
                 return ""; // not allowed
         }
@@ -1374,6 +1405,24 @@ export class PublicAPIConverter {
             idToken: t.idToken,
         });
     }
+
+    fromOrganizationPermission = (permission: OrganizationPermission): OrgMemberPermission => {
+        switch (permission) {
+            case OrganizationPermission.START_ARBITRARY_REPOS:
+                return "start_arbitrary_repositories";
+            default:
+                throw new Error(`unknown org member permission ${permission}`);
+        }
+    };
+
+    toOrganizationPermission = (permission: OrgMemberPermission): OrganizationPermission => {
+        switch (permission) {
+            case "start_arbitrary_repositories":
+                return OrganizationPermission.START_ARBITRARY_REPOS;
+            default:
+                throw new Error(`unknown org member permission ${permission}`);
+        }
+    };
 
     toSuggestedRepository(r: SuggestedRepositoryProtocol): SuggestedRepository {
         return new SuggestedRepository({

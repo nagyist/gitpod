@@ -4,11 +4,11 @@
 
 FROM caddy:2.7.6-builder AS withgo
 
-RUN go install golang.org/dl/go1.23.1@latest && \
-    go1.23.1 download && \
+RUN go install golang.org/dl/go1.24.3@latest && \
+    go1.24.3 download && \
     rm -rf /usr/local/go && \
     mv /go /usr/local/go && \
-    mv /usr/local/go/bin/go1.23.1 /usr/local/go/bin/go
+    mv /usr/local/go/bin/go1.24.3 /usr/local/go/bin/go
 
 FROM withgo AS builder
 
@@ -30,7 +30,7 @@ RUN xcaddy build v2.7.6 \
   --with github.com/gitpod-io/gitpod/proxy/plugins/sshtunnel=/plugins/sshtunnel \
   --with github.com/gitpod-io/gitpod/proxy/plugins/frontend_dev=/plugins/frontend_dev
 
-FROM cgr.dev/chainguard/wolfi-base:latest@sha256:3525626232d33ca137d020474cdf7659bc29b3c85b02d46c5ecf766cd72bbc59
+FROM cgr.dev/chainguard/wolfi-base:latest@sha256:9077f2e10d6d8083a8c5d732a3f5698414011e39837e8eb83a06402637a67638
 
 # Ensure latest packages are present, like security updates.
 RUN  apk upgrade --no-cache \

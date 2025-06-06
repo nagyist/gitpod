@@ -63,6 +63,7 @@ import {
     WorkspaceTimeoutDuration,
 } from "@gitpod/gitpod-protocol";
 import { IAnalyticsWriter, TrackMessage } from "@gitpod/gitpod-protocol/lib/analytics";
+import { scrubber } from "@gitpod/gitpod-protocol/lib/util/scrubbing";
 import { AttributionId } from "@gitpod/gitpod-protocol/lib/attribution";
 import { Deferred } from "@gitpod/gitpod-protocol/lib/util/deferred";
 import { LogContext, log } from "@gitpod/gitpod-protocol/lib/util/logging";
@@ -729,11 +730,12 @@ export class WorkspaceStarter {
                     project?.settings?.prebuilds?.triggerStrategy ?? "webhook-based";
             }
 
-            // update analytics
+            // update analytics - scrub properties that might contain sensitive data like URLs
+            const scrubbedTrackProperties = scrubber.scrub(trackProperties);
             this.analytics.track({
                 userId: user.id,
                 event: "workspace_started",
-                properties: trackProperties,
+                properties: scrubbedTrackProperties,
                 timestamp: new Date(instance.creationTime),
             });
         } catch (err) {
@@ -1083,15 +1085,17 @@ export class WorkspaceStarter {
             };
 
             if (WithReferrerContext.is(workspace.context)) {
+                // Scrub properties that might contain sensitive data like URLs
+                const scrubbedReferrerProperties = scrubber.scrub({
+                    workspaceId: workspace.id,
+                    instanceId: instance.id,
+                    referrer: workspace.context.referrer,
+                    referrerIde: workspace.context.referrerIde,
+                });
                 this.analytics.track({
                     userId: user.id,
                     event: "ide_referrer",
-                    properties: {
-                        workspaceId: workspace.id,
-                        instanceId: instance.id,
-                        referrer: workspace.context.referrer,
-                        referrerIde: workspace.context.referrerIde,
-                    },
+                    properties: scrubbedReferrerProperties,
                 });
             }
             return instance;
@@ -1238,11 +1242,19 @@ export class WorkspaceStarter {
                 additionalAuth,
             );
 
+            // Resolve feature flag with user context
+            const useRetryClient = await getExperimentsClientForBackend().getValueAsync(
+                "imagebuilder_retry_resolve",
+                false,
+                { user },
+            );
+
             const req = new BuildRequest();
             req.setSource(src);
             req.setAuth(auth);
             req.setForceRebuild(forceRebuild);
             req.setTriggeredBy(user.id);
+            req.setUseRetryClient(useRetryClient);
             if (!ignoreBaseImageresolvedAndRebuildBase && !forceRebuild && workspace.baseImageNameResolved) {
                 req.setBaseImageNameResolved(workspace.baseImageNameResolved);
             }
@@ -1395,10 +1407,16 @@ export class WorkspaceStarter {
                 err = new StartInstanceError("imageBuildFailed", err);
                 increaseImageBuildsCompletedTotal("failed");
             }
+            // Scrub properties that might contain sensitive data like URLs
+            const scrubbedImageBuildProperties = scrubber.scrub({
+                workspaceId: workspace.id,
+                instanceId: instance.id,
+                contextURL: workspace.contextURL,
+            });
             this.analytics.track({
                 userId: user.id,
                 event: "imagebuild-failed",
-                properties: { workspaceId: workspace.id, instanceId: instance.id, contextURL: workspace.contextURL },
+                properties: scrubbedImageBuildProperties,
             });
 
             throw err;
@@ -2068,8 +2086,16 @@ export class WorkspaceStarter {
         region?: WorkspaceRegion,
         organizationId?: string,
     ) {
+        // Resolve feature flag with user context
+        const useRetryClient = await getExperimentsClientForBackend().getValueAsync(
+            "imagebuilder_retry_resolve",
+            false,
+            { user },
+        );
+
         const req = new ResolveBaseImageRequest();
         req.setRef(imageRef);
+        req.setUseRetryClient(useRetryClient);
         const allowAll = new BuildRegistryAuthTotal();
         allowAll.setAllowAll(true);
         const auth = new BuildRegistryAuth();

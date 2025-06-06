@@ -1,6 +1,10 @@
 module github.com/gitpod-io/gitpod/ws-daemon/seccomp-profile-installer
 
-go 1.22
+go 1.24
+
+toolchain go1.24.3
+
+godebug tlsmlkem=0
 
 require (
 	github.com/containerd/containerd v1.6.36
@@ -34,3 +38,5 @@ require (
 	google.golang.org/grpc v1.59.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )
+
+replace github.com/garyburd/redigo => github.com/gomodule/redigo v1.9.2 // original repo removed from github

@@ -1,8 +1,10 @@
 module github.com/gitpod-io/gitpod/installer
 
-go 1.23.0
+go 1.24
 
-toolchain go1.23.3
+toolchain go1.24.3
+
+godebug tlsmlkem=0
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -435,3 +437,5 @@ replace k8s.io/endpointslice => k8s.io/endpointslice v0.31.9 // leeway indirect 
 replace k8s.io/kms => k8s.io/kms v0.31.9 // leeway indirect from components/common-go:lib
 
 replace k8s.io/cri-client => k8s.io/cri-client v0.31.9 // leeway indirect from components/common-go:lib
+
+replace github.com/garyburd/redigo => github.com/gomodule/redigo v1.9.2 // original repo removed from github

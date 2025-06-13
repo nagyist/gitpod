@@ -1,4 +1,4 @@
-FROM eu.gcr.io/gitpod-core-dev/dev/dev-environment:main-gha.32852
+FROM eu.gcr.io/gitpod-core-dev/dev/dev-environment:main-gha.33107
 
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

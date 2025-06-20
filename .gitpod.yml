@@ -1,4 +1,4 @@
-image: eu.gcr.io/gitpod-core-dev/dev/dev-environment:main-gha.32852
+image: eu.gcr.io/gitpod-core-dev/dev/dev-environment:main-gha.33107
 workspaceLocation: gitpod/gitpod-ws.code-workspace
 checkoutLocation: gitpod
 ports:
@@ -42,13 +42,6 @@ tasks:
         gp env -u GCP_ADC_FILE
       fi
       exit 0
-  - name: MCP Servers Setup
-    init: |
-      # Run Git MCP install script with current workspace as repository
-      ./scripts/install-git-mcp-go.sh /workspace/gitpod "$GIT_WRITE_ACCESS"
-
-      # Run Linear MCP install script
-      ./scripts/install-linear-mcp-go.sh "$LINEAR_WRITE_ACCESS"
   - name: Install `gitpod` CLI
     command: |
       leeway run components/local-app:install-cli
@@ -80,6 +73,13 @@ tasks:
     init: |
       ./components/gitpod-protocol/go/scripts/generate-config.sh
       leeway exec --filter-type go -v -- go mod verify
+  - name: claude code
+    command: |
+      if [[ -z "${CLAUDE_JSON}" ]]; then
+        echo "Skipping setup for Claude Code. Setup a CLAUDE_JSON variable to reuse Claude Code in workspaces."
+      else
+        echo $CLAUDE_JSON > ~/.claude.json
+      fi
 vscode:
   extensions:
     - EditorConfig.EditorConfig
